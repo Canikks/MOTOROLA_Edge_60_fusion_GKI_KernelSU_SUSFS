@@ -160,7 +160,10 @@ runs:
         mkdir -p release-assets
 
         names=$(mktemp)
-        for page in $(seq 1 20); do
+        # The NoMount artifact can land beyond the first page on big runs, so
+        # page farther than the other artifact groups and use explicit matching
+        # rather than a loose regex that may miss the hyphenated artifact name.
+        for page in $(seq 1 50); do
           batch=$(gh api "repos/${{ github.repository }}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100&page=${page}" \
             --jq '.artifacts[].name' || true)
           [ -z "$batch" ] && break
@@ -168,7 +171,10 @@ runs:
           count=$(grep -c . <<<"$batch" || true)
           [ "$count" -lt 100 ] && break
         done
-        mapfile -t nm < <(grep -iE 'nomount.*metamodule' "$names" | sort -u || true)
+
+        # Match the exact published artifact name, with case-insensitive fallback
+        # for any future naming changes, and also cover zipped directory naming.
+        mapfile -t nm < <(grep -iE '(^|/|[^[:alnum:]])NoMount[-_ ]Metamodule($|/|[^[:alnum:]])|(^|/|[^[:alnum:]])nomount[-_ ]metamodule($|/|[^[:alnum:]])' "$names" | sort -u || true)
         rm -f "$names"
 
         echo "Found ${#nm[@]} NoMount metamodule artifacts"

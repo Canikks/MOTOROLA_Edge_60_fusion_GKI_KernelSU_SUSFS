@@ -267,6 +267,9 @@ runs:
           )
         done
 
+        # Build the zip file that the release step expects. A NoMount artifact may
+        # be downloaded as a directory from the prior run, so package it before
+        # validating or uploading the final release payload.
         for dir in release-assets/*NoMount*Metamodule* release-assets/*NoMount-Metamodule*; do
           [[ -d "$dir" ]] || continue
           zip_name="${dir}.zip"
@@ -279,6 +282,14 @@ runs:
 
         shopt -u nullglob
         echo "zips: $(ls -1 release-assets/*.zip 2>/dev/null | wc -l)"
+
+        if compgen -G 'release-assets/*NoMount*Metamodule*.zip' > /dev/null; then
+          echo "NoMount metamodule zip present:"
+          ls -1 release-assets/*NoMount*Metamodule*.zip | sort
+        else
+          echo "WARN: NoMount metamodule zip not present yet; listing release-assets for inspection." >&2
+          find release-assets -maxdepth 2 -mindepth 1 -printf '%P\n' | sort >&2 || true
+        fi
 
     - name: Create Release
       shell: bash
@@ -311,7 +322,7 @@ runs:
 
         uploaded=0
         for f in "${files[@]}"; do
-          if gh release upload "$TAG_NAME" "$f" --clobber >/dev/null 2>&1; then
+          if gh release upload "$TAG_NAME" "$f" --clobber >/dev/null 1>&2; then
             uploaded=$((uploaded + 1))
           else
             echo "WARN: failed to upload $f" >&2
